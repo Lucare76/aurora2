@@ -3,7 +3,6 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 
-// 🔹 Configurazione di Firebase (dal tuo progetto)
 const firebaseConfig = {
   apiKey: "AIzaSyAjnQw4gnlB_EHQYwumi0_IwtdBfDJ4KOk",
   authDomain: "aurora2-8d28f.firebaseapp.com",
@@ -13,11 +12,9 @@ const firebaseConfig = {
   appId: "1:668958903802:web:f64c3cc584da9efc692843"
 };
 
-// 🔹 Inizializza Firebase
+// Inizializza Firebase
 const app = initializeApp(firebaseConfig);
-
-// 🔹 Inizializza Firestore
 const db = getFirestore(app);
 
-// 🔹 Esporta app e db per usarli in tutto il progetto
+// Esporta per uso in tutta l'app
 export { app, db };

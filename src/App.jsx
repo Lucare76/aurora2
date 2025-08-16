@@ -1,11 +1,12 @@
 // src/App.jsx
+
 import React from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Dashboard from './pages/Dashboard';
 import ResourcesPage from './pages/ResourcesPage';
 import TransactionsPage from './pages/TransactionsPage';
 import CategoriesPage from './pages/CategoriesPage';
-import BirthdaysPage from './pages/BirthdaysPage';
+import BirthdaysPage from './pages/BirthdaysPage'; // ✅ Import corretto?
 import AuthButton from './components/AuthButton';
 import ProtectedRoute from './components/ProtectedRoute';
 

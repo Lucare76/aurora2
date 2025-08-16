@@ -2,8 +2,16 @@
 
 import React, { useState, useEffect } from 'react';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
-import { app } from '../firebase/firebaseConfig';
-import { getUserBirthdays, addBirthday } from '../firebase/firestore';
+import { app, db } from '../firebase/firebaseConfig';
+import { 
+  getUserBirthdays, 
+  addBirthday 
+} from '../firebase/firestore';
+import { 
+  doc, 
+  updateDoc, 
+  deleteDoc 
+} from 'firebase/firestore';
 import Layout from '../components/Layout';
 
 const BirthdaysPage = () => {
@@ -12,7 +20,9 @@ const BirthdaysPage = () => {
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState('');
   const [date, setDate] = useState('');
-  const [type, setType] = useState('birthday'); // birthday, saint, anniversary
+  const [type, setType] = useState('birthday');
+  const [editing, setEditing] = useState(null);
+  const [showBirthdays, setShowBirthdays] = useState(true);
 
   useEffect(() => {
     const auth = getAuth(app);
@@ -22,12 +32,14 @@ const BirthdaysPage = () => {
         try {
           const userBirthdays = await getUserBirthdays(currentUser.uid);
           setBirthdays(userBirthdays);
+
+          const saved = localStorage.getItem(`birthdaySettings_${currentUser.uid}`);
+          if (saved) {
+            setShowBirthdays(JSON.parse(saved));
+          }
         } catch (error) {
           console.error('Errore nel caricamento compleanni:', error);
         }
-      } else {
-        setUser(null);
-        setBirthdays([]);
       }
       setLoading(false);
     });
@@ -57,6 +69,45 @@ const BirthdaysPage = () => {
     }
   };
 
+  const handleEdit = (b) => {
+    setEditing({ ...b });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editing.name || !editing.date) return;
+
+    try {
+      await updateDoc(doc(db, 'birthdays', editing.id), {
+        name: editing.name,
+        date: editing.date,
+        type: editing.type
+      });
+      setBirthdays(birthdays.map(b => b.id === editing.id ? editing : b));
+      setEditing(null);
+    } catch (error) {
+      alert('Errore nel salvataggio: ' + error.message);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Sei sicuro di voler eliminare questo compleanno?')) return;
+
+    try {
+      await deleteDoc(doc(db, 'birthdays', id));
+      setBirthdays(birthdays.filter(b => b.id !== id));
+    } catch (error) {
+      alert('Errore nell’eliminazione: ' + error.message);
+    }
+  };
+
+  const handleToggleShow = () => {
+    const newValue = !showBirthdays;
+    setShowBirthdays(newValue);
+    if (user) {
+      localStorage.setItem(`birthdaySettings_${user.uid}`, JSON.stringify(newValue));
+    }
+  };
+
   if (loading) {
     return (
       <Layout>
@@ -67,10 +118,7 @@ const BirthdaysPage = () => {
     );
   }
 
-  // Ordina per data (mese e giorno)
-  const sorted = [...birthdays].sort((a, b) => {
-    return a.date.slice(5) > b.date.slice(5) ? 1 : -1;
-  });
+  const sorted = [...birthdays].sort((a, b) => a.date.slice(5) > b.date.slice(5) ? 1 : -1);
 
   return (
     <Layout>
@@ -107,139 +155,208 @@ const BirthdaysPage = () => {
         </div>
       </header>
 
-      {/* Form aggiungi */}
-      <form onSubmit={handleAdd} style={styles.form}>
-        <h3 style={styles.title}>Aggiungi una ricorrenza</h3>
+      <div style={{
+        marginBottom: '20px',
+        padding: '16px',
+        backgroundColor: 'white',
+        borderRadius: '8px',
+        boxShadow: '0 2px 5px rgba(0,0,0,0.1)'
+      }}>
+        <label>
+          <input
+            type="checkbox"
+            checked={showBirthdays}
+            onChange={handleToggleShow}
+          />
+          Mostra notifiche compleanni
+        </label>
+      </div>
+
+      <form onSubmit={handleAdd} style={{
+        marginBottom: '30px',
+        padding: '20px',
+        backgroundColor: 'white',
+        borderRadius: '8px',
+        boxShadow: '0 2px 5px rgba(0,0,0,0.1)'
+      }}>
+        <h3 style={{
+          margin: '0 0 15px 0',
+          fontSize: '18px',
+          color: '#333'
+        }}>Aggiungi una ricorrenza</h3>
         <input
           type="text"
           placeholder="Nome (es. Mamma, Nonno)"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          style={styles.input}
+          style={{
+            display: 'block',
+            width: '100%',
+            padding: '8px',
+            marginBottom: '10px',
+            border: '1px solid #ddd',
+            borderRadius: '4px',
+            fontSize: '14px'
+          }}
           required
         />
         <input
           type="date"
           value={date}
           onChange={(e) => setDate(e.target.value)}
-          style={styles.input}
+          style={{
+            display: 'block',
+            width: '100%',
+            padding: '8px',
+            marginBottom: '10px',
+            border: '1px solid #ddd',
+            borderRadius: '4px',
+            fontSize: '14px'
+          }}
           required
         />
-        <select value={type} onChange={(e) => setType(e.target.value)} style={styles.select}>
+        <select value={type} onChange={(e) => setType(e.target.value)} style={{
+          display: 'block',
+          width: '100%',
+          padding: '8px',
+          marginBottom: '10px',
+          border: '1px solid #ddd',
+          borderRadius: '4px',
+          fontSize: '14px'
+        }}>
           <option value="birthday">Compleanno</option>
           <option value="saint">Santo</option>
           <option value="anniversary">Anniversario</option>
         </select>
-        <button type="submit" style={styles.button}>
+        <button type="submit" style={{
+          padding: '10px 16px',
+          backgroundColor: '#28a745',
+          color: 'white',
+          border: 'none',
+          borderRadius: '4px',
+          cursor: 'pointer',
+          fontWeight: '500'
+        }}>
           Aggiungi Ricorrenza
         </button>
       </form>
 
-      {/* Tabella */}
-      <div style={styles.tableContainer}>
-        <h3 style={styles.tableTitle}>Elenco Ricorrenze</h3>
-        <table style={styles.table}>
-          <thead>
-            <tr style={styles.headerRow}>
-              <th style={styles.headerCell}>Nome</th>
-              <th style={styles.headerCell}>Data</th>
-              <th style={styles.headerCell}>Tipo</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map(b => (
-              <tr key={b.id}>
-                <td style={styles.cell}>{b.name}</td>
-                <td style={styles.cell}>{b.date}</td>
-                <td style={styles.cell}>
-                  <span style={{
-                    padding: '4px 8px',
-                    fontSize: '12px',
-                    borderRadius: '4px',
-                    color: 'white',
-                    backgroundColor: 
-                      b.type === 'birthday' ? '#e67e22' :
-                      b.type === 'saint' ? '#9b59b6' : '#1abc9c'
-                  }}>
-                    {b.type === 'birthday' ? '🎂' :
-                     b.type === 'saint' ? '✝️' : '💍'}
-                  </span>
-                </td>
+      {showBirthdays && (
+        <div style={{
+          backgroundColor: 'white',
+          padding: '24px',
+          borderRadius: '10px',
+          boxShadow: '0 2px 10px rgba(0,0,0,0.08)'
+        }}>
+          <h3 style={{
+            margin: '0 0 15px 0',
+            fontSize: '18px',
+            color: '#495057'
+          }}>Elenco Ricorrenze</h3>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
+            <thead>
+              <tr style={{ backgroundColor: '#f1f3f5' }}>
+                <th style={{ padding: '12px', textAlign: 'left', color: '#6c757d' }}>Nome</th>
+                <th style={{ padding: '12px', textAlign: 'left', color: '#6c757d' }}>Data</th>
+                <th style={{ padding: '12px', textAlign: 'left', color: '#6c757d' }}>Tipo</th>
+                <th style={{ padding: '12px', textAlign: 'left', color: '#6c757d' }}>Azioni</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {sorted.map(b => (
+                <tr key={b.id}>
+                  <td style={{ padding: '12px', borderBottom: '1px solid #dee2e6' }}>
+                    {editing?.id === b.id ? (
+                      <input
+                        value={editing.name}
+                        onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+                        style={{ padding: '2px', width: '100%' }}
+                      />
+                    ) : (
+                      b.name
+                    )}
+                  </td>
+                  <td style={{ padding: '12px', borderBottom: '1px solid #dee2e6' }}>
+                    {editing?.id === b.id ? (
+                      <input
+                        type="date"
+                        value={editing.date}
+                        onChange={(e) => setEditing({ ...editing, date: e.target.value })}
+                        style={{ padding: '2px' }}
+                      />
+                    ) : (
+                      b.date
+                    )}
+                  </td>
+                  <td style={{ padding: '12px', borderBottom: '1px solid #dee2e6' }}>
+                    {editing?.id === b.id ? (
+                      <select
+                        value={editing.type}
+                        onChange={(e) => setEditing({ ...editing, type: e.target.value })}
+                        style={{ padding: '2px' }}
+                      >
+                        <option value="birthday">Compleanno</option>
+                        <option value="saint">Santo</option>
+                        <option value="anniversary">Anniversario</option>
+                      </select>
+                    ) : (
+                      <span style={{
+                        padding: '4px 8px',
+                        fontSize: '12px',
+                        borderRadius: '4px',
+                        color: 'white',
+                        backgroundColor: 
+                          b.type === 'birthday' ? '#e67e22' :
+                          b.type === 'saint' ? '#9b59b6' : '#1abc9c'
+                      }}>
+                        {b.type === 'birthday' ? '🎂' :
+                         b.type === 'saint' ? '✝️' : '💍'}
+                      </span>
+                    )}
+                  </td>
+                  <td style={{ padding: '12px', borderBottom: '1px solid #dee2e6' }}>
+                    {editing?.id === b.id ? (
+                      <>
+                        <button onClick={handleSaveEdit} style={{
+                          padding: '6px 12px',
+                          backgroundColor: '#28a745',
+                          color: 'white',
+                          border: 'none',
+                          marginRight: '5px'
+                        }}>Salva</button>
+                        <button onClick={() => setEditing(null)} style={{
+                          padding: '6px 12px',
+                          backgroundColor: '#6c757b',
+                          color: 'white',
+                          border: 'none'
+                        }}>Annulla</button>
+                      </>
+                    ) : (
+                      <>
+                        <button onClick={() => handleEdit(b)} style={{
+                          padding: '4px 8px',
+                          backgroundColor: '#ffc107',
+                          color: 'white',
+                          border: 'none',
+                          marginRight: '5px'
+                        }}>Modifica</button>
+                        <button onClick={() => handleDelete(b.id)} style={{
+                          padding: '4px 8px',
+                          backgroundColor: '#dc3545',
+                          color: 'white',
+                          border: 'none'
+                        }}>Elimina</button>
+                      </>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </Layout>
   );
-};
-
-const styles = {
-  form: {
-    marginBottom: '30px',
-    padding: '20px',
-    backgroundColor: 'white',
-    borderRadius: '8px',
-    boxShadow: '0 2px 5px rgba(0,0,0,0.1)'
-  },
-  title: {
-    margin: '0 0 15px 0',
-    fontSize: '18px',
-    color: '#333'
-  },
-  input: {
-    display: 'block',
-    width: '100%',
-    padding: '8px',
-    marginBottom: '10px',
-    border: '1px solid #ddd',
-    borderRadius: '4px',
-    fontSize: '14px'
-  },
-  select: {
-    display: 'block',
-    width: '100%',
-    padding: '8px',
-    marginBottom: '10px',
-    border: '1px solid #ddd',
-    borderRadius: '4px',
-    fontSize: '14px'
-  },
-  button: {
-    padding: '10px 16px',
-    backgroundColor: '#28a745',
-    color: 'white',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    fontWeight: '500'
-  },
-  tableContainer: {
-    backgroundColor: 'white',
-    padding: '24px',
-    borderRadius: '10px',
-    boxShadow: '0 2px 10px rgba(0,0,0,0.08)'
-  },
-  tableTitle: {
-    margin: '0 0 15px 0',
-    fontSize: '18px',
-    color: '#495057'
-  },
-  table: {
-    width: '100%',
-    borderCollapse: 'collapse',
-    fontSize: '14px'
-  },
-  headerRow: { backgroundColor: '#f1f3f5' },
-  headerCell: {
-    padding: '12px',
-    textAlign: 'left',
-    color: '#6c757d'
-  },
-  cell: {
-    padding: '12px',
-    borderBottom: '1px solid #dee2e6'
-  }
 };
 
 export default BirthdaysPage;

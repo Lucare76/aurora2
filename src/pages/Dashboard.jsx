@@ -3,12 +3,14 @@
 import React, { useState, useEffect } from 'react';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import { app } from '../firebase/firebaseConfig';
-import { getUserAccounts } from '../firebase/firestore';
+import { getUserAccounts, getUserTransactions } from '../firebase/firestore';
+import WeatherWidget from '../components/WeatherWidget';
 import Layout from '../components/Layout';
 
 const Dashboard = () => {
   const [user, setUser] = useState(null);
   const [accounts, setAccounts] = useState([]);
+  const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -18,13 +20,17 @@ const Dashboard = () => {
         setUser(currentUser);
         try {
           const userAccounts = await getUserAccounts(currentUser.uid);
+          const userTransactions = await getUserTransactions(currentUser.uid);
+
           setAccounts(userAccounts);
+          setTransactions(userTransactions);
         } catch (error) {
-          console.error('Errore nel caricamento conti:', error);
+          console.error('Errore nel caricamento dati:', error);
         }
       } else {
         setUser(null);
         setAccounts([]);
+        setTransactions([]);
       }
       setLoading(false);
     });
@@ -36,13 +42,19 @@ const Dashboard = () => {
     return (
       <Layout>
         <div style={{ textAlign: 'center', marginTop: '100px' }}>
-          Caricamento dati...
+          Caricamento dashboard...
         </div>
       </Layout>
     );
   }
 
-  const totalBalance = accounts.reduce((sum, acc) => sum + (acc.balance || 0), 0);
+  const totalBalance = accounts
+    .filter(acc => acc.status !== 'inactive')
+    .reduce((sum, acc) => sum + (acc.balance || 0), 0);
+
+  const recentTransactions = transactions
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
+    .slice(0, 5);
 
   return (
     <Layout>
@@ -79,120 +91,73 @@ const Dashboard = () => {
         </div>
       </header>
 
-      {/* Saldo attuale */}
-      <div style={{
-        backgroundColor: 'white',
-        padding: '24px',
-        borderRadius: '10px',
-        boxShadow: '0 2px 10px rgba(0,0,0,0.08)',
-        textAlign: 'center',
-        marginBottom: '30px'
-      }}>
-        <h2 style={{ margin: 0, color: '#495057', fontSize: '18px', marginBottom: '12px' }}>
-          Saldo Attuale
-        </h2>
-        <p style={{ 
-          fontSize: '2.2em', 
-          fontWeight: 'bold', 
-          color: '#27ae60', 
-          margin: '10px 0'
-        }}>
-          € {totalBalance.toFixed(2)}
-        </p>
-        <button style={{
-          padding: '10px 24px',
-          backgroundColor: '#3498db',
-          color: 'white',
-          border: 'none',
-          borderRadius: '6px',
-          cursor: 'pointer',
-          fontWeight: '500',
-          transition: 'background 0.2s'
-        }}
-        onMouseOver={e => e.target.style.background = '#2980b9'}
-        onMouseOut={e => e.target.style.background = '#3498db'}>
-          Visualizza i movimenti
-        </button>
+      {/* Widget Meteo */}
+      <WeatherWidget />
+
+      {/* Statistiche */}
+      <div style={styles.statsContainer}>
+        <div style={styles.statCard}>
+          <h3 style={styles.statTitle}>Saldo Totale</h3>
+          <p style={styles.statValue}>€ {totalBalance.toFixed(2)}</p>
+        </div>
+
+        <div style={styles.statCard}>
+          <h3 style={styles.statTitle}>Conti Attivi</h3>
+          <p style={styles.statValue}>{accounts.filter(acc => acc.status !== 'inactive').length}</p>
+        </div>
+
+        <div style={styles.statCard}>
+          <h3 style={styles.statTitle}>Transazioni Oggi</h3>
+          <p style={styles.statValue}>
+            {transactions.filter(t => t.date === new Date().toISOString().split('T')[0]).length}
+          </p>
+        </div>
       </div>
 
-      {/* Disponibilità risorse */}
-      <div style={{ 
-        backgroundColor: 'white', 
-        padding: '24px', 
-        borderRadius: '10px', 
-        boxShadow: '0 2px 10px rgba(0,0,0,0.08)'
-      }}>
-        <h3 style={{ 
-          margin: 0, 
-          color: '#495057', 
-          fontSize: '18px' 
-        }}>
-          Disponibilità risorse
-        </h3>
-        <table style={{ 
-          width: '100%', 
-          borderCollapse: 'collapse', 
-          fontSize: '14px' 
-        }}>
+      {/* Transazioni recenti */}
+      <div style={styles.tableContainer}>
+        <h3 style={styles.tableTitle}>Transazioni Recenti</h3>
+        <table style={styles.table}>
           <thead>
-            <tr style={{ backgroundColor: '#f1f3f5' }}>
-              <th style={{ 
-                padding: '12px', 
-                textAlign: 'left', 
-                color: '#6c757d' 
-              }}>
-                Risorsa
-              </th>
-              <th style={{ 
-                padding: '12px', 
-                textAlign: 'left', 
-                color: '#6c757d' 
-              }}>
-                Saldo
-              </th>
-              <th style={{ 
-                padding: '12px', 
-                textAlign: 'left', 
-                color: '#6c757d' 
-              }}>
-                Stato
-              </th>
+            <tr style={styles.headerRow}>
+              <th style={styles.headerCell}>Data</th>
+              <th style={styles.headerCell}>Descrizione</th>
+              <th style={styles.headerCell}>Tipo</th>
+              <th style={styles.headerCell}>Importo</th>
             </tr>
           </thead>
           <tbody>
-            {accounts.length > 0 ? (
-              accounts.map((acc) => (
-                <tr key={acc.id}>
-                  <td style={{ 
-                    padding: '12px', 
-                    borderBottom: '1px solid #dee2e6' 
-                  }}>
-                    {acc.name}
-                  </td>
-                  <td style={{ 
-                    padding: '12px', 
-                    borderBottom: '1px solid #dee2e6' 
-                  }}>
-                    € {acc.balance?.toFixed(2) || '0.00'}
-                  </td>
-                  <td style={{ 
-                    padding: '12px', 
-                    borderBottom: '1px solid #dee2e6' 
-                  }}>
+            {recentTransactions.length > 0 ? (
+              recentTransactions.map(t => (
+                <tr key={t.id}>
+                  <td style={styles.cell}>{t.date}</td>
+                  <td style={styles.cell}>{t.description}</td>
+                  <td style={styles.cell}>
                     <span style={{
-                      color: '#27ae60',
-                      fontWeight: '500',
-                      fontSize: '13px'
+                      padding: '4px 8px',
+                      fontSize: '12px',
+                      borderRadius: '4px',
+                      color: 'white',
+                      backgroundColor: 
+                        t.type === 'income' ? '#28a745' :
+                        t.type === 'expense' ? '#dc3545' : '#6c757b'
                     }}>
-                      ✅ In uso
+                      {t.type === 'income' ? 'Entrata' : t.type === 'expense' ? 'Uscita' : 'Giroconto'}
                     </span>
+                  </td>
+                  <td style={{
+                    ...styles.cell,
+                    fontWeight: 'bold',
+                    color: t.amount > 0 ? '#28a745' : '#dc3545'
+                  }}>
+                    € {Math.abs(t.amount).toFixed(2)}
                   </td>
                 </tr>
               ))
             ) : (
               <tr>
-                <td colSpan="3" style={{ textAlign: 'center', padding: '12px', color: '#6c757d' }}>
-                  Nessuna risorsa disponibile
+                <td colSpan="4" style={{ textAlign: 'center', padding: '12px', color: '#6c757d' }}>
+                  Nessuna transazione recente
                 </td>
               </tr>
             )}
@@ -201,6 +166,60 @@ const Dashboard = () => {
       </div>
     </Layout>
   );
+};
+
+// Stili
+const styles = {
+  statsContainer: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+    gap: '20px',
+    marginBottom: '30px'
+  },
+  statCard: {
+    backgroundColor: 'white',
+    padding: '20px',
+    borderRadius: '10px',
+    boxShadow: '0 2px 10px rgba(0,0,0,0.08)',
+    textAlign: 'center'
+  },
+  statTitle: {
+    margin: '0 0 10px 0',
+    fontSize: '16px',
+    color: '#495057'
+  },
+  statValue: {
+    margin: '0',
+    fontSize: '24px',
+    fontWeight: 'bold',
+    color: '#333'
+  },
+  tableContainer: {
+    backgroundColor: 'white',
+    padding: '24px',
+    borderRadius: '10px',
+    boxShadow: '0 2px 10px rgba(0,0,0,0.08)'
+  },
+  tableTitle: {
+    margin: '0 0 15px 0',
+    fontSize: '18px',
+    color: '#495057'
+  },
+  table: {
+    width: '100%',
+    borderCollapse: 'collapse',
+    fontSize: '14px'
+  },
+  headerRow: { backgroundColor: '#f1f3f5' },
+  headerCell: {
+    padding: '12px',
+    textAlign: 'left',
+    color: '#6c757d'
+  },
+  cell: {
+    padding: '12px',
+    borderBottom: '1px solid #dee2e6'
+  }
 };
 
 export default Dashboard;
