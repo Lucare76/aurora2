@@ -95,6 +95,28 @@ export const getUserTransactions = async (userId) => {
   }
 };
 
+// 🔹 Aggiorna una transazione
+export const updateTransaction = async (transactionId, transactionData) => {
+  try {
+    await updateDoc(doc(db, 'transactions', transactionId), transactionData);
+    console.log('Transazione aggiornata:', transactionId);
+  } catch (error) {
+    console.error('Errore nell’aggiornamento della transazione:', error);
+    throw error;
+  }
+};
+
+// 🔹 Elimina una transazione
+export const deleteTransaction = async (transactionId) => {
+  try {
+    await deleteDoc(doc(db, 'transactions', transactionId));
+    console.log('Transazione eliminata:', transactionId);
+  } catch (error) {
+    console.error('Errore nell’eliminazione della transazione:', error);
+    throw error;
+  }
+};
+
 // 🔹 Aggiungi una categoria
 export const addCategory = async (categoryData) => {
   try {

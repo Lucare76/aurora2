@@ -1,10 +1,23 @@
 // src/components/Layout.jsx
 
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { getAuth, signOut } from 'firebase/auth';
 import MorningGreeting from './MorningGreeting';
 
 const Layout = ({ children }) => {
+  const navigate = useNavigate();
+  const auth = getAuth();
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      navigate('/login');
+    } catch (error) {
+      console.error('Errore nel logout:', error);
+    }
+  };
+
   return (
     <div style={styles.container}>
       {/* Sidebar */}
@@ -12,7 +25,7 @@ const Layout = ({ children }) => {
         {/* Logo */}
         <img
           src="https://firebasestorage.googleapis.com/v0/b/aurora2-8d28f.firebasestorage.app/o/logo-aurora-ghibli.jpg?alt=media&token=90126242-877e-4b4a-865e-12d2b2605ff9"
-          alt="Logo Aurora 2.0 - Stile Studio Ghibli"
+          alt="Logo Aurora 2.0"
           style={styles.logo}
         />
 
@@ -33,6 +46,17 @@ const Layout = ({ children }) => {
 
       {/* Contenuto principale */}
       <div style={styles.content}>
+        {/* Header con logout */}
+        <header style={styles.header}>
+          <div style={styles.userInfo}>
+            <span>Benvenuto!</span>
+            <div style={styles.avatar}>TU</div>
+          </div>
+          <button onClick={handleLogout} style={styles.logoutButton}>
+            🔐 Esci
+          </button>
+        </header>
+
         <MorningGreeting />
         {children}
       </div>
@@ -92,6 +116,41 @@ const styles = {
     padding: '30px',
     backgroundColor: '#f8f9fa',
     minHeight: '100vh'
+  },
+  header: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '30px',
+    borderBottom: '1px solid #dee2e6',
+    paddingBottom: '15px'
+  },
+  userInfo: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    fontSize: '14px'
+  },
+  avatar: {
+    width: '40px',
+    height: '40px',
+    borderRadius: '50%',
+    backgroundColor: '#3498db',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: '14px'
+  },
+  logoutButton: {
+    padding: '8px 16px',
+    backgroundColor: '#dc3545',
+    color: 'white',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontWeight: '500'
   }
 };
 
@@ -107,4 +166,4 @@ if (styleSheet) {
   `, styleSheet.cssRules.length);
 }
 
-export default Layout;  
+export default Layout;

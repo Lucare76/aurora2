@@ -6,10 +6,12 @@ import { app } from '../firebase/firebaseConfig';
 import { 
   getUserAccounts, 
   getUserTransactions, 
-  addTransaction 
+  addTransaction,
+  updateTransaction,
+  deleteTransaction 
 } from '../firebase/firestore';
+import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import Layout from '../components/Layout';
-import ImportBankStatement from '../components/ImportBankStatement';
 
 const TransactionsPage = () => {
   const [user, setUser] = useState(null);
@@ -25,6 +27,7 @@ const TransactionsPage = () => {
     categoryId: '',
     subcategoryId: ''
   });
+  const [editing, setEditing] = useState(null);
 
   // Stati per categorie e sottocategorie
   const [categories, setCategories] = useState([]);
@@ -79,7 +82,7 @@ const TransactionsPage = () => {
       return;
     }
 
-    const newTransaction = {
+    const transactionData = {
       ...form,
       amount: parseFloat(form.amount),
       userId: user.uid,
@@ -87,7 +90,15 @@ const TransactionsPage = () => {
     };
 
     try {
-      await addTransaction(newTransaction);
+      if (editing) {
+        await updateTransaction(editing.id, transactionData);
+        setTransactions(transactions.map(t => t.id === editing.id ? { ...transactionData, id: editing.id } : t));
+        setEditing(null);
+      } else {
+        await addTransaction(transactionData);
+      }
+      
+      // Resetta il form
       setForm({
         date: '',
         description: '',
@@ -97,11 +108,36 @@ const TransactionsPage = () => {
         categoryId: '',
         subcategoryId: ''
       });
+      
       // Ricarica le transazioni
       const updated = await getUserTransactions(user.uid);
       setTransactions(updated);
     } catch (error) {
       alert('Errore: ' + error.message);
+    }
+  };
+
+  const handleEdit = (t) => {
+    setEditing(t);
+    setForm({
+      date: t.date,
+      description: t.description,
+      amount: t.amount,
+      type: t.type,
+      accountId: t.accountId,
+      categoryId: t.categoryId || '',
+      subcategoryId: t.subcategoryId || ''
+    });
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Sei sicuro di voler eliminare questa transazione?')) return;
+
+    try {
+      await deleteTransaction(id);
+      setTransactions(transactions.filter(t => t.id !== id));
+    } catch (error) {
+      alert('Errore nell’eliminazione: ' + error.message);
     }
   };
 
@@ -121,16 +157,11 @@ const TransactionsPage = () => {
         <h1 style={styles.title}>💰 Movimenti</h1>
       </header>
 
-      {/* Componente di importazione */}
-      <ImportBankStatement 
-        onTransactionImported={(newTrans) => setTransactions(prev => [newTrans, ...prev])}
-        userId={user.uid}
-        accounts={accounts}
-      />
-
-      {/* Form aggiungi transazione */}
+      {/* Form aggiungi/modifica transazione */}
       <div style={styles.formContainer}>
-        <h3 style={styles.formTitle}>Aggiungi una transazione</h3>
+        <h3 style={styles.formTitle}>
+          {editing ? 'Modifica transazione' : 'Aggiungi una transazione'}
+        </h3>
         <form onSubmit={handleSubmit} style={styles.form}>
           <div style={styles.formRow}>
             <input
@@ -195,9 +226,31 @@ const TransactionsPage = () => {
             </select>
           </div>
 
-          <button type="submit" style={styles.button}>
-            Aggiungi Movimento
-          </button>
+          <div style={styles.formActions}>
+            <button type="submit" style={styles.button}>
+              {editing ? 'Salva Modifiche' : 'Aggiungi Movimento'}
+            </button>
+            {editing && (
+              <button
+                type="button"
+                onClick={() => {
+                  setEditing(null);
+                  setForm({
+                    date: '',
+                    description: '',
+                    amount: '',
+                    type: 'expense',
+                    accountId: form.accountId,
+                    categoryId: '',
+                    subcategoryId: ''
+                  });
+                }}
+                style={styles.cancelButton}
+              >
+                Annulla
+              </button>
+            )}
+          </div>
         </form>
       </div>
 
@@ -212,6 +265,7 @@ const TransactionsPage = () => {
               <th style={styles.headerCell}>Tipo</th>
               <th style={styles.headerCell}>Conto</th>
               <th style={styles.headerCell}>Importo</th>
+              <th style={styles.headerCell}>Azioni</th>
             </tr>
           </thead>
           <tbody>
@@ -245,11 +299,25 @@ const TransactionsPage = () => {
                     }}>
                       € {t.amount.toFixed(2)}
                     </td>
+                    <td style={styles.cell}>
+                      <button
+                        onClick={() => handleEdit(t)}
+                        style={{ ...styles.actionButton, backgroundColor: '#ffc107' }}
+                      >
+                        Modifica
+                      </button>
+                      <button
+                        onClick={() => handleDelete(t.id)}
+                        style={{ ...styles.actionButton, backgroundColor: '#dc3545' }}
+                      >
+                        Elimina
+                      </button>
+                    </td>
                   </tr>
                 ))
             ) : (
               <tr>
-                <td colSpan="5" style={{ textAlign: 'center', padding: '12px', color: '#6c757d' }}>
+                <td colSpan="6" style={{ textAlign: 'center', padding: '12px', color: '#6c757d' }}>
                   Nessuna transazione
                 </td>
               </tr>
@@ -308,6 +376,11 @@ const styles = {
     borderRadius: '4px',
     fontSize: '14px'
   },
+  formActions: {
+    display: 'flex',
+    gap: '10px',
+    marginTop: '10px'
+  },
   button: {
     padding: '10px 16px',
     backgroundColor: '#28a745',
@@ -315,8 +388,16 @@ const styles = {
     border: 'none',
     borderRadius: '4px',
     cursor: 'pointer',
-    fontWeight: '500',
-    alignSelf: 'start'
+    fontWeight: '500'
+  },
+  cancelButton: {
+    padding: '10px 16px',
+    backgroundColor: '#6c757b',
+    color: 'white',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontWeight: '500'
   },
   tableContainer: {
     backgroundColor: 'white',
@@ -343,6 +424,15 @@ const styles = {
   cell: {
     padding: '12px',
     borderBottom: '1px solid #dee2e6'
+  },
+  actionButton: {
+    padding: '6px 10px',
+    border: 'none',
+    borderRadius: '4px',
+    color: 'white',
+    cursor: 'pointer',
+    fontSize: '12px',
+    marginRight: '5px'
   }
 };
 
